@@ -1,0 +1,28 @@
+:root {
+    --ink: #20201f;
+    --muted: #74716c;
+    --line: #e8e4dd;
+    --paper: #fffdf9;
+    --canvas: #f4f1eb;
+    --accent: #e85d3f;
+    --accent-soft: #fff0eb;
+    --accent-dark: #bf432a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    background: var(--canvas) !important;
+    color: var(--ink);
+}
+
+#app {
+    max-width: 1180px !important;
+    background: var(--paper) !important;
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 40px rgba(45, 38, 28, 0.07) !important;
+}
+
+@media (min-width: 1200px) {
+    #app { margin-block: 18px; height: calc(100vh - 36px) !important; border-radius: 22px; overflow: hidden; }
+}

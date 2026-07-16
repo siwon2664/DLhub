@@ -1,0 +1,26 @@
+.home-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: #e96e52 !important;
+    border: 0 !important;
+    border-radius: 18px !important;
+    box-shadow: none;
+    text-align: left !important;
+    padding-inline: clamp(24px, 6vw, 64px) !important;
+}
+.home-hero h2 { color: #fffaf3 !important; max-width: 620px; letter-spacing: -0.045em; }
+.home-hero p { color: #c9c4bb !important; max-width: 560px; }
+.home-hero::before {
+    content: "DAEJEON · LOCAL GUIDE";
+    position: absolute;
+    right: 28px;
+    bottom: 22px;
+    color: rgba(255,255,255,.12);
+    font-size: clamp(20px, 4vw, 48px);
+    font-weight: 800;
+    letter-spacing: .08em;
+    white-space: nowrap;
+    z-index: -1;
+}
+.home-hero::after { content: none; }

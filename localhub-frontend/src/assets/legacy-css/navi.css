@@ -1,0 +1,10 @@
+header nav button {
+    position: relative;
+    padding: 7px 10px !important;
+    border-radius: 8px;
+    color: var(--muted);
+    transition: color .16s ease, background-color .16s ease;
+}
+header nav button:hover { background: #f5f1ea; color: var(--ink) !important; transform: none; }
+header nav button::after { content: none; }
+header nav button.text-blue-500 { background: #f2eee7; color: var(--ink) !important; font-weight: 700; }

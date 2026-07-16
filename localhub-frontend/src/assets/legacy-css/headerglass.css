@@ -1,0 +1,12 @@
+header {
+    position: relative;
+    background: rgba(255, 253, 249, 0.96) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom: 1px solid var(--line) !important;
+    box-shadow: none;
+}
+header::after { content: none; }
+header h1 { color: var(--ink) !important; letter-spacing: -0.04em; }
+header h1 i { color: var(--accent) !important; }
+header .bg-blue-50 { border: 1px solid #f5d9cf; }

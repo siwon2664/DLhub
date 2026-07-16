@@ -1,0 +1,164 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 아래 커스텀 css 파일들은 원본 프로젝트(css/ 폴더)에는 존재했지만
+ * 이번 변환 작업에 제공된 프로젝트 파일 목록(index_db2.html, kakaomap.html, main.py)에는
+ * 포함되어 있지 않아 내용을 가져올 수 없었습니다.
+ * 아래 파일들을 원본 프로젝트에서 복사해 src/assets/legacy-css/ 에 넣고 주석을 해제한 뒤
+ * main.js 에서 import 하세요.
+ *
+ * import "./assets/legacy-css/layout.css";
+ * import "./assets/legacy-css/navi.css";
+ * import "./assets/legacy-css/headerglass.css";
+ * import "./assets/legacy-css/cardlift.css";
+ * import "./assets/legacy-css/homehero.css";
+ * import "./assets/legacy-css/list.css";
+ * import "./assets/legacy-css/background.css";
+ * import "./assets/legacy-css/fadeshift.css";
+ * import "./assets/legacy-css/glasscard.css";
+ * import "./assets/legacy-css/body.css";
+ */
+
+        /* 부드러운 화면 전환 및 챗봇 애니메이션을 위한 트랜지션 설정 */
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.2s ease;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+        }
+
+        .chat-enter-active, .chat-leave-active {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .chat-enter-from, .chat-leave-to {
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+        }
+
+        /* css/cardlift.css의 ".grid button > div { background: ... !important }" 규칙이
+           .grid 조상을 가진 카드형 버튼(예: HOT PLACE 위젯) 안의 장소 썸네일 박스에도 적용되어,
+           이미지가 없을 때 보여야 할 회색 빈 박스가 카드 배경색(크림색)으로 덮여버리는 문제가 있어
+           더 높은 우선순위로 명시적으로 되돌린다. */
+        .poi-thumb.bg-gray-200 {
+            background-color: #e5e7eb !important;
+        }
+
+        /* 형광펜으로 칠한 듯한 "HOT" 배지 (지도 사이드바 추천 장소용) */
+        .hot-badge {
+    display: inline-block;
+    padding: 1px 7px 0;
+    font-size: 10px;
+    font-weight: 800;
+    font-style: italic;
+    letter-spacing: 0.02em;
+    color: #7f1d1d;
+    background: linear-gradient(115deg, transparent 0%, transparent 4%, #fca5a5 4%, #fca5a5 92%, transparent 92%, transparent 100%);
+    border-radius: 2px;
+    transform: rotate(-2deg);
+    white-space: nowrap;
+}
+
+        /* LocalHub custom calendar */
+        .localhub-calendar-shell {
+            font-family: Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            border: 1px solid #fed7aa;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .calendar-weekday {
+            padding: 9px 2px;
+            background: #fff7ed;
+            border-bottom: 1px solid #fed7aa;
+            color: #9a3412;
+            font-size: 11px;
+            font-weight: 800;
+            text-align: center;
+        }
+        .calendar-weekday:first-child { color: #ef4444; }
+        .calendar-weekday:last-child { color: #ea580c; }
+        .calendar-day {
+            position: relative;
+            min-width: 0;
+            min-height: 54px;
+            padding: 6px;
+            border-right: 1px solid #ffedd5;
+            border-bottom: 1px solid #ffedd5;
+            background: #fff;
+            text-align: left;
+            transition: background-color .16s ease;
+        }
+        .calendar-day:nth-child(7n) { border-right: 0; }
+        .calendar-day:hover { background: #fff7ed; }
+        .calendar-day.is-outside { background: #fffaf5; }
+        .calendar-day.is-outside .calendar-day-number { color: #cbd5e1; }
+        .calendar-day.is-selected { background: #fff7ed; box-shadow: inset 0 0 0 1px #fdba74; }
+        .calendar-day-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 750;
+        }
+        .calendar-day.is-sunday .calendar-day-number { color: #ef4444; }
+        .calendar-day.is-saturday .calendar-day-number { color: #ea580c; }
+        .calendar-day.is-today .calendar-day-number { background: #f97316; color: #fff; }
+        .calendar-event-preview {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            min-width: 0;
+            margin-top: 3px;
+            padding: 3px 5px;
+            border-radius: 6px;
+            background: #fff7ed;
+            color: #c2410c;
+            font-size: 9px;
+            font-weight: 750;
+        }
+        .calendar-event-preview::before {
+            content: '';
+            width: 5px;
+            height: 5px;
+            border-radius: 999px;
+            background: #f97316;
+            flex: 0 0 auto;
+        }
+        .calendar-event-preview span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .calendar-event-count { margin-top: 3px; color: #ea580c; font-size: 9px; font-weight: 800; }
+        .calendar-nav-button {
+            width: 32px;
+            height: 32px;
+            border: 1px solid #fed7aa;
+            border-radius: 10px;
+            background: #fff;
+            color: #475569;
+            transition: .16s ease;
+        }
+        .calendar-nav-button:hover { border-color: #fb923c; background: #fff7ed; color: #ea580c; }
+        .calendar-modal-grid .calendar-day { min-height: 88px; padding: 8px; }
+        .calendar-modal-grid .calendar-event-preview { font-size: 10px; padding: 4px 6px; }
+        .calendar-collapse-enter-active,
+        .calendar-collapse-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }
+        .calendar-collapse-enter-from,
+        .calendar-collapse-leave-to { opacity: 0; transform: translateY(-6px); }
+        .hot-place-slide-enter-active,
+        .hot-place-slide-leave-active { transition: opacity 0.22s ease, transform 0.22s ease; }
+        .hot-place-slide-enter-from { opacity: 0; transform: translateX(18px); }
+        .hot-place-slide-leave-to { opacity: 0; transform: translateX(-18px); }
+
+        /* 사용자 지정 스크롤바 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

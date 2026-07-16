@@ -1,0 +1,13 @@
+.grid button {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--line) !important;
+    border-radius: 14px !important;
+    background: #fff;
+    box-shadow: none;
+    transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+.grid button:hover { transform: translateY(-2px); border-color: #bbb4aa !important; background: #faf7f2; box-shadow: none; }
+.grid button::before { content: none; }
+.grid button > div { background: #f3efe8 !important; border-radius: 12px !important; }
+.grid button i { color: var(--accent) !important; }

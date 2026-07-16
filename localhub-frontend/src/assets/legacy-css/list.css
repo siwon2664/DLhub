@@ -1,0 +1,11 @@
+.border-t-2.border-gray-300 {
+    border: 1px solid var(--line) !important;
+    border-radius: 14px !important;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: none;
+}
+.border-t-2.border-gray-300 > .bg-gray-100 { background: #f3efe8 !important; }
+.border-t-2.border-gray-300 li { position: relative; transition: background-color .15s ease; }
+.border-t-2.border-gray-300 li:hover { background: #faf7f2 !important; }
+.border-t-2.border-gray-300 li::before { content: none; }

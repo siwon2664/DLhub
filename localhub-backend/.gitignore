@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 환경변수 파일은 절대 커밋하지 않는다. 예시 파일(.env.example)만 저장소에 포함한다.
+.env
+.env.*
+!.env.example

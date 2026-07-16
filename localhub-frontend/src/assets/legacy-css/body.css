@@ -1,0 +1,60 @@
+body {
+    font-family: Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.015em;
+}
+
+main { background: var(--paper) !important; }
+
+button, input, textarea, select { font: inherit; }
+button { letter-spacing: -0.01em; }
+
+input, textarea, select {
+    border-color: var(--line) !important;
+    background: #fff !important;
+    color: var(--ink) !important;
+    border-radius: 10px !important;
+}
+
+input:focus, textarea:focus, select:focus {
+    outline: none !important;
+    border-color: #aaa39a !important;
+    box-shadow: 0 0 0 3px rgba(32, 32, 31, 0.06);
+}
+
+.text-blue-500, .text-blue-600, .text-blue-700, .text-blue-800 { color: var(--accent) !important; }
+.bg-blue-500 { background: var(--accent) !important; }
+.bg-blue-600, .hover\:bg-blue-600:hover { background: var(--accent-dark) !important; }
+/* .bg-blue-50 { background: var(--accent-soft) !important; } */
+.border-blue-500 { border-color: var(--accent) !important; }
+.outline-blue-400, .focus\:outline-blue-500:focus { outline-color: var(--accent) !important; }
+.hover\:text-blue-500:hover { color: var(--accent) !important; }
+.hover\:bg-blue-50:hover { background: var(--accent-soft) !important; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: #d4cfc7; border: 2px solid var(--paper); border-radius: 999px; }
+
+/* 지역 지도 검색 영역: 홈 히어로와 분리된 편안한 주황 계열 */
+.map-search-panel {
+    background: #f7e5d5 !important;
+    border-color: #ead0b8 !important;
+}
+
+.map-search-input {
+    background: #fffaf5 !important;
+    border-color: #dfb995 !important;
+    color: var(--ink) !important;
+}
+
+.map-search-input::placeholder { color: #9a7455; }
+.map-search-input:focus {
+    border-color: #cf8651 !important;
+    box-shadow: 0 0 0 3px rgba(207, 134, 81, 0.14) !important;
+}
+
+/* 커뮤니티 경로 표시에는 별도 배경을 적용하지 않음 */
+.community-breadcrumb {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}

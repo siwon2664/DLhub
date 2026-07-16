@@ -1,0 +1,24 @@
+# Render "Blueprint" 배포용 설정
+# Render 대시보드 > New > Blueprint 에서 이 저장소를 지정하면 자동으로 인식됩니다.
+#
+# 주의(무료 플랜):
+#   - Render 무료 웹서비스 플랜은 영구 디스크(Persistent Disk)를 지원하지 않아,
+#     재배포/재시작 시 로컬 파일시스템 변화(예: post.db에 새로 쓴 게시글)가 초기화될 수 있습니다.
+#   - data/tour_data.db, data/bus_data.db 는 읽기 전용 시드 데이터이므로 반드시 git 저장소에
+#     함께 커밋해서 배포에 포함시켜야 합니다 (.gitignore에서 제외하지 마세요).
+#   - 게시판 데이터(post.db)를 배포 간에도 유지하려면 유료 플랜의 Persistent Disk를 추가하거나,
+#     별도의 DB(PostgreSQL 등)로 교체하는 것을 권장합니다.
+services:
+  - type: web
+    name: localhub-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.9

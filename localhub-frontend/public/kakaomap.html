@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오맵 관광 데이터 지도</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        // 이 파일은 정적 파일로 그대로 서빙되므로(Netlify/Vite 개발서버 모두 동일하게),
+        // 빌드 시점 문자열 치환 대신 부모 페이지(App.vue)가 iframe src에 실어서 넘겨주는
+        // 쿼리 파라미터(apiBase, kakaoKey)에서 직접 값을 읽는다.
+        // -> npm run dev / npm run build 어느 쪽에서 열어도 항상 동작한다.
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            var apiBase = params.get('apiBase') || 'http://localhost:8000';
+            var kakaoKey = params.get('kakaoKey') || '';
+
+            window.__API_BASE_URL__ = apiBase;
+
+            if (!kakaoKey) {
+                console.warn('[kakaomap] kakaoKey 쿼리 파라미터가 없습니다. 지도가 로드되지 않습니다. App.vue에서 VITE_KAKAO_APP_KEY가 설정되어 있는지 확인하세요.');
+            }
+
+            // <head> 파싱 도중 document.write로 삽입해야 이후의 <script> 태그들보다
+            // 먼저(동기적으로) 로드가 완료되어, autoload=false + 뒤쪽의 kakao.maps.load(...) 호출이 정상 동작한다.
+            document.write(
+                '<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=' +
+                encodeURIComponent(kakaoKey) +
+                '&libraries=clusterer&autoload=false"><' + '/script>'
+            );
+        })();
+    </script>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <div id="map-wrapper" class="flex-1 relative h-full min-h-[40vh]">
+
+        <div id="map" class="w-full h-full bg-gray-200 relative">
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 p-4 text-center placeholder-content">
+                <p class="text-base md:text-lg font-bold">지도를 불러오는 중...</p>
+            </div>
+        </div>
+
+        <!-- 카테고리 필터 패널 -->
+        <div id="filter-panel" class="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200 p-3 max-w-[220px] text-sm transition-all duration-200">
+            <div class="flex items-center justify-between gap-2">
+                <span class="font-bold text-gray-800 whitespace-nowrap">📍 카테고리</span>
+                <button id="filter-toggle-btn" type="button" title="패널 접기/펼치기"
+                        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+                    <svg id="filter-toggle-icon" class="w-4 h-4 transition-transform duration-200" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 7.5l5 5 5-5" />
+                    </svg>
+                </button>
+            </div>
+            <div id="filter-content" class="mt-2">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex gap-1">
+                        <button id="check-all-btn" class="text-xs text-blue-600 hover:underline">전체</button>
+                        <span class="text-gray-300">|</span>
+                        <button id="uncheck-all-btn" class="text-xs text-gray-500 hover:underline">해제</button>
+                    </div>
+                </div>
+                <div id="category-list" class="flex flex-col gap-1.5"></div>
+                <div class="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+                    총 <span id="poi-count">0</span>개 지점
+                </div>
+            </div>
+        </div>
+
+        <!-- 버스 노선 필터 패널 -->
+        <div id="route-panel" class="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200 p-3 max-sm:w-44 text-sm transition-all duration-200">
+            <div class="flex items-center justify-between gap-2">
+                <span class="font-bold text-gray-800 whitespace-nowrap">🚌 버스노선</span>
+                <button id="route-toggle-btn" type="button" title="패널 펼치기"
+                        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+                    <svg id="route-toggle-icon" class="w-4 h-4 transition-transform duration-200 rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 7.5l5 5 5-5" />
+                    </svg>
+                </button>
+            </div>
+            <div id="route-content" class="mt-2 hidden">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex gap-1">
+                        <button id="route-check-all-btn" class="text-xs text-blue-600 hover:underline">전체</button>
+                        <span class="text-gray-300">|</span>
+                        <button id="route-uncheck-all-btn" class="text-xs text-gray-500 hover:underline">해제</button>
+                    </div>
+                </div>
+                <input id="route-search-input" type="text" placeholder="버스번호 검색..."
+                       class="w-full text-xs border border-gray-200 rounded-md px-2 py-1 mb-2 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                <div id="route-list" class="flex flex-col gap-1 max-h-64 overflow-y-auto pr-1"></div>
+                <div class="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+                    총 <span id="route-count">0</span>개 노선 · 선택 <span id="route-selected-count">0</span>개
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ------------------------------------------------------------------
+        // 1. 카테고리(contenttypeid) 설정: 라벨 + 색상
+        // ------------------------------------------------------------------
+        const CATEGORY_CONFIG = {
+            '12': { label: '관광지',        color: '#3B82F6' },
+            '14': { label: '문화시설',      color: '#8B5CF6' },
+            '15': { label: '축제/공연/행사', color: '#EC4899' },
+            '25': { label: '여행코스',      color: '#14B8A6' },
+            '28': { label: '레포츠',        color: '#F97316' },
+            '32': { label: '숙박',          color: '#6366F1' },
+            '38': { label: '쇼핑',          color: '#EAB308' },
+            '39': { label: '음식점',        color: '#EF4444' },
+        };
+        const DEFAULT_CATEGORY = { label: '기타', color: '#6B7280' };
+
+        // 부모 페이지에서 전달한 초기 활성 카테고리(contenttypeid)
+        const queryParams = new URLSearchParams(window.location.search);
+        const requestedCategory = queryParams.get('category') || '39';
+        const requestedLatRaw = queryParams.get('lat');
+        const requestedLngRaw = queryParams.get('lng');
+        const requestedFocusId = queryParams.get('focusId');
+        const requestedLat = requestedLatRaw === null ? NaN : Number(requestedLatRaw);
+        const requestedLng = requestedLngRaw === null ? NaN : Number(requestedLngRaw);
+        const hasRequestedCenter = requestedLatRaw !== null
+            && requestedLngRaw !== null
+            && Number.isFinite(requestedLat)
+            && Number.isFinite(requestedLng);
+
+        // 카테고리별 상태 저장: { clusterer, markers: [], checked: bool }
+        const categoryState = {};
+
+        // 버스 노선별 상태 저장: { label, color, polyline, checked: bool, ...routeInfo }
+        const routeState = {};
+
+        let map = null;
+        let activeOverlay = null;
+        let activeMarker = null;
+        let activeMarkerImage = null;
+        const poiMarkerIndex = new Map();
+
+        // setLevel(animate)과 panTo를 동시에 호출하면 카카오맵 내부에서 두 애니메이션이 서로
+        // 간섭한다(레벨이 안 바뀌면 setLevel이 방금 시작된 panTo를 씹어서 이동이 안 되고,
+        // 레벨이 바뀌면 반대로 zoom만 제자리에서 실행되고 panTo가 씹혀서 이동을 안 한다).
+        // 그래서 두 애니메이션을 동시에 걸지 않고, 레벨을 먼저 바꾼 뒤(필요한 경우) 그 애니메이션이
+        // 끝나는 'idle' 이벤트를 기다렸다가 panTo로 이어서 이동시킨다.
+        function focusMapOn(position, maxLevel = 4) {
+            const targetLevel = Math.min(map.getLevel(), maxLevel);
+            if (map.getLevel() === targetLevel) {
+                map.panTo(position);
+                return;
+            }
+            const onIdle = () => {
+                kakao.maps.event.removeListener(map, 'idle', onIdle);
+                map.panTo(position);
+            };
+            kakao.maps.event.addListener(map, 'idle', onIdle);
+            map.setLevel(targetLevel, { animate: true });
+        }
+
+        // 팝업이 열려있는 동안 핀이 팝업과 다른 위치에 떠 있는 것처럼 보이지 않도록,
+        // 클릭된 핀은 잠시 투명 이미지로 바꿔 숨기고(지도/클러스터러에서 완전히 제거하지는 않음),
+        // 팝업이 닫히거나 다른 핀이 열릴 때 원래 이미지로 되돌린다.
+        function showPoiOverlay(poi, overlay, position, notifyParent = false, marker = null, markerImage = null) {
+            if (activeOverlay) activeOverlay.setMap(null);
+            clearActiveRecommendation();
+            if (activeMarker && activeMarker !== marker) {
+                activeMarker.setImage(activeMarkerImage);
+            }
+            overlay.setMap(map);
+            activeOverlay = overlay;
+            if (marker) {
+                marker.setImage(getTransparentMarkerImage());
+            }
+            activeMarker = marker;
+            activeMarkerImage = markerImage;
+            focusMapOn(position);
+            if (notifyParent && window.parent !== window) {
+                window.parent.postMessage({ type: 'localhub:place-selected', place: poi }, window.location.origin);
+            }
+        }
+
+        function hideActivePoiOverlay() {
+            if (activeOverlay) {
+                activeOverlay.setMap(null);
+                activeOverlay = null;
+            }
+            if (activeMarker) {
+                activeMarker.setImage(activeMarkerImage);
+                activeMarker = null;
+                activeMarkerImage = null;
+            }
+            clearActiveRecommendation();
+        }
+
+        // ------------------------------------------------------------------
+        // 2. SVG 핀 마커 이미지 생성 (카테고리 색상별로 캐싱)
+        // ------------------------------------------------------------------
+        const markerImageCache = {};
+
+        function getMarkerImage(color) {
+            if (markerImageCache[color]) return markerImageCache[color];
+
+            const svg = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42">
+                    <path d="M17 0C7.6 0 0 7.6 0 17c0 12.7 17 25 17 25s17-12.3 17-25C34 7.6 26.4 0 17 0z"
+                          fill="${color}" stroke="white" stroke-width="2"/>
+                    <circle cx="17" cy="17" r="6" fill="white"/>
+                </svg>
+            `.trim();
+
+            const dataUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+            const imageSize = new kakao.maps.Size(34, 42);
+            const imageOption = { offset: new kakao.maps.Point(17, 42) };
+            const markerImage = new kakao.maps.MarkerImage(dataUrl, imageSize, imageOption);
+
+            markerImageCache[color] = markerImage;
+            return markerImage;
+        }
+
+        // 팝업이 열려있는 핀을 완전히 지도에서 지우지 않고 "안 보이게"만 만들기 위한
+        // 투명 마커 이미지 (크기/오프셋은 실제 핀 이미지와 동일하게 유지).
+        let transparentMarkerImage = null;
+
+        function getTransparentMarkerImage() {
+            if (transparentMarkerImage) return transparentMarkerImage;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42"></svg>`;
+            const dataUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+            transparentMarkerImage = new kakao.maps.MarkerImage(
+                dataUrl,
+                new kakao.maps.Size(34, 42),
+                { offset: new kakao.maps.Point(17, 42) }
+            );
+            return transparentMarkerImage;
+        }
+
+        // ------------------------------------------------------------------
+        // 3. 지도 초기화
+        // ------------------------------------------------------------------
+        function initMap() {
+            const mapContainer = document.getElementById('map');
+            mapContainer.innerHTML = '';
+            const mapOption = {
+                center: hasRequestedCenter
+                    ? new kakao.maps.LatLng(requestedLat, requestedLng)
+                    : new kakao.maps.LatLng(36.3504119, 127.3845475), // 대전광역시청 또는 선택 이벤트
+                level: 5 // 숫자가 작을수록 확대됨 (기존 9에서 살짝 확대)
+            };
+            return new kakao.maps.Map(mapContainer, mapOption);
+        }
+
+        // ------------------------------------------------------------------
+        // 4. 마커 클릭 시 표시할 정보 오버레이
+        // ------------------------------------------------------------------
+        function buildOverlayContent(poi, categoryLabel, color) {
+            const addr = [poi.addr1, poi.addr2].filter(Boolean).join(' ');
+            const imageHtml = poi.firstimage
+                ? `<img src="${poi.firstimage}" class="w-full h-24 object-cover rounded-md mb-2" onerror="this.style.display='none'">`
+                : '';
+            const telHtml = poi.tel
+                ? `<div class="text-xs text-gray-500 mt-1">📞 ${poi.tel}</div>`
+                : '';
+
+            // 말풍선 꼬리(tail)는 절대 위치로 박스 밖에 겹쳐 그리지 않고, 박스 아래 "일반 흐름"에
+            // 그대로 쌓아서 전체 높이에 포함시킨다. 이렇게 해야 카카오맵이 계산하는 CustomOverlay의
+            // 전체 높이(yAnchor 기준)에 꼬리 끝까지 포함되어, 꼬리 끝이 정확히 핀 좌표에 맞춰진다.
+            return `
+                <div class="flex flex-col items-center" style="filter:drop-shadow(0 10px 8px rgba(0,0,0,0.10)) drop-shadow(0 4px 3px rgba(0,0,0,0.08));">
+                    <div class="bg-white rounded-lg border border-gray-200 p-4 flex flex-col w-80 max-w-[calc(100vw-2rem)]">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <span class="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                  style="background:${color}20; color:${color};">
+                                ${categoryLabel}
+                            </span>
+                            <button type="button" class="route-rec-btn shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-white text-gray-500 border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                                    onclick="event.stopPropagation(); toggleRecommendedRoutes('${poi.contentid}', '${poi.mapy}', '${poi.mapx}', this)">
+                                🚌 추천 버스경로
+                            </button>
+                        </div>
+                        ${imageHtml}
+                        <div class="font-bold text-gray-800 text-sm mb-1 break-words">${poi.title}</div>
+                        ${addr ? `<div class="text-xs text-gray-600 break-words">${addr}</div>` : ''}
+                        ${telHtml}
+                    </div>
+                    <div class="relative" style="width:18px; height:10px; margin-top:-1px;">
+                        <div class="absolute" style="left:0; top:0; width:0; height:0;
+                                    border-left:9px solid transparent; border-right:9px solid transparent;
+                                    border-top:10px solid #e5e7eb;"></div>
+                        <div class="absolute" style="left:1px; top:0; width:0; height:0;
+                                    border-left:8px solid transparent; border-right:8px solid transparent;
+                                    border-top:9px solid white;"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ------------------------------------------------------------------
+        // 5. POI 배열을 카테고리별로 분류하여 마커 + 클러스터러 생성
+        // ------------------------------------------------------------------
+        function renderPois(pois) {
+            // 데이터에 실제 존재하는 카테고리만 그룹핑
+            const grouped = {};
+            pois.forEach(poi => {
+                const key = poi.contenttypeid || 'unknown';
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(poi);
+            });
+
+            Object.keys(grouped).forEach(typeId => {
+                const config = CATEGORY_CONFIG[typeId] || DEFAULT_CATEGORY;
+                const isDefaultChecked = (typeId === requestedCategory);
+
+                // 카테고리별 클러스터러 (가까운 마커는 숫자로 뭉쳐서 표시)
+                const clusterer = new kakao.maps.MarkerClusterer({
+                    map: map,
+                    averageCenter: true,
+                    minLevel: 6,
+                    disableClickZoom: false,
+                    styles: [{
+                        width: '40px', height: '40px',
+                        background: `${config.color}CC`,
+                        borderRadius: '20px',
+                        color: '#fff',
+                        textAlign: 'center',
+                        lineHeight: '40px',
+                        fontWeight: 'bold',
+                        fontSize: '13px'
+                    }]
+                });
+
+                categoryState[typeId] = {
+                    label: config.label,
+                    color: config.color,
+                    clusterer: clusterer,
+                    markers: [],
+                    rawPois: grouped[typeId],
+                    built: false,
+                    checked: isDefaultChecked
+                };
+
+                // 처음 화면에 바로 보여야 하는 카테고리만 즉시 마커를 만들고,
+                // 나머지는 사용자가 체크박스로 켤 때 그제서야 만든다 (초기 로드 속도 개선).
+                if (isDefaultChecked) {
+                    buildCategoryMarkers(typeId);
+                }
+            });
+
+            document.getElementById('poi-count').textContent = pois.length;
+            renderFilterPanel();
+
+            if (requestedFocusId) {
+                const focusPoi = pois.find(p => String(p.contentid) === String(requestedFocusId));
+                const focusTypeId = focusPoi ? (focusPoi.contenttypeid || 'unknown') : null;
+                if (focusTypeId && categoryState[focusTypeId] && !categoryState[focusTypeId].built) {
+                    buildCategoryMarkers(focusTypeId);
+                }
+                const focused = poiMarkerIndex.get(String(requestedFocusId));
+                if (focused) showPoiOverlay(focused.poi, focused.overlay, focused.position, false, focused.marker, focused.markerImage);
+            }
+        }
+
+        // 특정 카테고리의 마커/오버레이를 실제로 생성한다 (최초 노출 시점까지 지연).
+        function buildCategoryMarkers(typeId) {
+            const state = categoryState[typeId];
+            if (!state || state.built) return;
+            state.built = true;
+
+            const markerImage = getMarkerImage(state.color);
+            const markers = [];
+
+            state.rawPois.forEach(poi => {
+                const lat = parseFloat(poi.mapy);
+                const lng = parseFloat(poi.mapx);
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                const position = new kakao.maps.LatLng(lat, lng);
+                const marker = new kakao.maps.Marker({
+                    position: position,
+                    image: markerImage,
+                    title: poi.title
+                });
+
+                // 말풍선 꼬리 끝이 핀 좌표에 정확히 맞도록, 가로는 중앙(0.5) / 세로는
+                // 전체 콘텐츠(카드+꼬리) 맨 아래(1)를 기준점으로 삼는다.
+                const overlay = new kakao.maps.CustomOverlay({
+                    content: buildOverlayContent(poi, state.label, state.color),
+                    position: position,
+                    xAnchor: 0.5,
+                    yAnchor: 1,
+                    zIndex: 10
+                });
+
+                kakao.maps.event.addListener(marker, 'click', function () {
+                    if (activeOverlay === overlay) {
+                        hideActivePoiOverlay();
+                    } else {
+                        showPoiOverlay(poi, overlay, position, true, marker, markerImage);
+                    }
+                });
+
+                poiMarkerIndex.set(String(poi.contentid), { poi, overlay, position, marker, markerImage });
+
+                markers.push(marker);
+            });
+
+            state.markers = markers;
+            if (state.checked) {
+                state.clusterer.addMarkers(markers);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // 6. 필터(체크박스) 패널 렌더링 + 토글 로직
+        // ------------------------------------------------------------------
+        function renderFilterPanel() {
+            const list = document.getElementById('category-list');
+            list.innerHTML = '';
+
+            Object.keys(categoryState)
+                .sort((a, b) => categoryState[b].rawPois.length - categoryState[a].rawPois.length)
+                .forEach(typeId => {
+                    const state = categoryState[typeId];
+                    const row = document.createElement('label');
+                    row.className = 'flex items-center gap-2 cursor-pointer select-none';
+                    row.innerHTML = `
+                        <input type="checkbox" ${state.checked ? 'checked' : ''} class="w-3.5 h-3.5 rounded accent-current"
+                               style="color:${state.color}" data-type="${typeId}">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${state.color}"></span>
+                        <span class="text-gray-700">${state.label}</span>
+                        <span class="text-gray-400 text-xs ml-auto">${state.rawPois.length}</span>
+                    `;
+                    list.appendChild(row);
+                });
+
+            list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const typeId = e.target.dataset.type;
+                    toggleCategory(typeId, e.target.checked);
+                });
+            });
+        }
+
+        function toggleCategory(typeId, visible) {
+            const state = categoryState[typeId];
+            if (!state) return;
+            state.checked = visible;
+
+            // 아직 한 번도 켠 적 없는 카테고리는 이 시점에 처음으로 마커를 생성한다.
+            if (!state.built) {
+                if (visible) buildCategoryMarkers(typeId);
+                return;
+            }
+
+            // 카카오 MarkerClusterer에는 setMap 메서드가 없으므로
+            // clear()로 지웠다가 addMarkers()로 다시 채워 넣는 방식으로 토글한다.
+            if (visible) {
+                state.clusterer.addMarkers(state.markers);
+            } else {
+                state.clusterer.clear();
+            }
+
+            if (!visible && activeOverlay) {
+                // 카테고리를 끌 때, 혹시 열려있는 상세정보 오버레이(및 숨겨둔 핀)도 정리
+                hideActivePoiOverlay();
+            }
+        }
+
+        document.getElementById('check-all-btn').addEventListener('click', () => {
+            document.querySelectorAll('#category-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+                toggleCategory(cb.dataset.type, true);
+            });
+        });
+        document.getElementById('uncheck-all-btn').addEventListener('click', () => {
+            document.querySelectorAll('#category-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+                toggleCategory(cb.dataset.type, false);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // 6-2. 버스 노선 색상 생성 (골든 앵글로 색상환을 고르게 분산)
+        // ------------------------------------------------------------------
+        function getRouteColor(index) {
+            const hue = (index * 137.508) % 360; // 황금각
+            return `hsl(${hue.toFixed(0)}, 72%, 45%)`;
+        }
+
+        // ------------------------------------------------------------------
+        // 6-3. 노선 클릭 시 표시할 정보 오버레이
+        // ------------------------------------------------------------------
+        function buildRouteOverlayContent(route, color, position) {
+            const typeBadge = route.route_type
+                ? `<span class="text-gray-400">(${route.route_type})</span>`
+                : '';
+            return `
+                <div class="relative -mt-3">
+                    <div class="bg-white rounded-lg shadow-xl border border-gray-200 p-3 flex flex-col w-56">
+                        <span class="inline-block self-start text-[10px] font-semibold px-2 py-0.5 rounded-full mb-1.5"
+                              style="background:${color}20; color:${color};">
+                            버스노선
+                        </span>
+                        <div class="font-bold text-gray-800 text-sm mb-1">${route.route_no}번 ${typeBadge}</div>
+                        <div class="text-xs text-gray-600">${route.start_name} → ${route.end_name}</div>
+                        <div class="text-xs text-gray-400 mt-1">정류장 ${route.stop_count}개</div>
+                    </div>
+                    <div class="absolute bottom-[-8px] left-6 w-0 h-0
+                                border-l-[8px] border-l-transparent
+                                border-r-[8px] border-r-transparent
+                                border-t-[8px] border-t-white"></div>
+                </div>
+            `;
+        }
+
+        // ------------------------------------------------------------------
+        // 6-4. 노선 데이터 렌더링: 노선별 Polyline + 버스번호 뱃지 생성 (기본은 지도에서 숨김)
+        // ------------------------------------------------------------------
+        function buildRouteBadgeContent(routeNo, color) {
+            return `
+                <div style="
+                    background:${color};
+                    color:#fff;
+                    font-size:11px;
+                    font-weight:700;
+                    padding:2px 7px;
+                    border-radius:9999px;
+                    box-shadow:0 1px 4px rgba(0,0,0,0.35);
+                    white-space:nowrap;
+                    border:1.5px solid white;
+                ">${routeNo}번</div>
+            `;
+        }
+
+        function renderRoutes(routes) {
+            routes.forEach((route, index) => {
+                const color = getRouteColor(index);
+                const path = route.path.map(p => new kakao.maps.LatLng(p.lat, p.lng));
+
+                const polyline = new kakao.maps.Polyline({
+                    path: path,
+                    strokeWeight: 4,
+                    strokeColor: color,
+                    strokeOpacity: 0.85,
+                    strokeStyle: 'solid'
+                    // map을 지정하지 않으면 기본적으로 숨겨진 상태로 생성된다.
+                });
+
+                // 노선 중간 지점에 항상 보이는 버스번호 뱃지 (클릭 없이도 바로 보임)
+                const midPosition = path[Math.floor(path.length / 2)];
+                const badgeOverlay = new kakao.maps.CustomOverlay({
+                    content: buildRouteBadgeContent(route.route_no, color),
+                    position: midPosition,
+                    yAnchor: 0.5,
+                    zIndex: 15
+                    // map을 지정하지 않으면 기본적으로 숨겨진 상태로 생성된다.
+                });
+
+                let detailOverlay = null;
+                kakao.maps.event.addListener(polyline, 'click', function (mouseEvent) {
+                    const wasDetailOverlay = activeOverlay === detailOverlay;
+                    if (activeOverlay) activeOverlay.setMap(null);
+                    // 노선 팝업을 열 때도 이전에 숨겨둔 핀(있다면)을 원래 이미지로 되돌린다.
+                    if (activeMarker) {
+                        activeMarker.setImage(activeMarkerImage);
+                        activeMarker = null;
+                        activeMarkerImage = null;
+                    }
+                    if (wasDetailOverlay) {
+                        activeOverlay = null;
+                        return;
+                    }
+                    if (!detailOverlay) {
+                        detailOverlay = new kakao.maps.CustomOverlay({
+                            content: buildRouteOverlayContent(route, color, mouseEvent.latLng),
+                            position: mouseEvent.latLng,
+                            yAnchor: 1.3,
+                            zIndex: 20
+                        });
+                    } else {
+                        detailOverlay.setPosition(mouseEvent.latLng);
+                    }
+                    detailOverlay.setMap(map);
+                    activeOverlay = detailOverlay;
+                });
+
+                routeState[route.route_id] = {
+                    routeNo: route.route_no,
+                    routeType: route.route_type,
+                    startName: route.start_name,
+                    endName: route.end_name,
+                    stopCount: route.stop_count,
+                    color: color,
+                    polyline: polyline,
+                    badgeOverlay: badgeOverlay,
+                    checked: false,
+                    recommended: false
+                };
+            });
+
+            document.getElementById('route-count').textContent = routes.length;
+            renderRoutePanel();
+        }
+
+        // ------------------------------------------------------------------
+        // 6-5. 노선 체크박스 패널 렌더링 (검색어로 필터링)
+        // ------------------------------------------------------------------
+        function renderRoutePanel(filterText = '') {
+            const list = document.getElementById('route-list');
+            list.innerHTML = '';
+
+            const keyword = filterText.trim().toLowerCase();
+            const ids = Object.keys(routeState).filter(routeId => {
+                if (!keyword) return true;
+                return String(routeState[routeId].routeNo).toLowerCase().includes(keyword);
+            });
+
+            ids.forEach(routeId => {
+                const state = routeState[routeId];
+                const row = document.createElement('label');
+                row.className = 'flex items-center gap-2 cursor-pointer select-none';
+                row.innerHTML = `
+                    <input type="checkbox" ${state.checked ? 'checked' : ''} class="w-3.5 h-3.5 rounded"
+                           data-route-id="${routeId}">
+                    <span class="inline-block w-2.5 h-3 rounded-sm" style="background:${state.color}"></span>
+                    <span class="text-gray-700">${state.routeNo}번</span>
+                    <span class="text-gray-400 text-[11px] ml-auto truncate max-w-[90px]">${state.startName}→${state.endName}</span>
+                `;
+                list.appendChild(row);
+            });
+
+            list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    toggleRoute(e.target.dataset.routeId, e.target.checked);
+                });
+            });
+
+            updateSelectedRouteCount();
+        }
+
+        function updateSelectedRouteCount() {
+            const count = Object.values(routeState).filter(s => s.checked).length;
+            document.getElementById('route-selected-count').textContent = count;
+        }
+
+        // 체크박스(checked)와 팝업의 추천 버스경로(recommended)는 서로 독립적인 표시 조건이며,
+        // 둘 중 하나라도 켜져 있으면 노선을 지도에 그린다.
+        function updateRouteVisibility(routeId) {
+            const state = routeState[routeId];
+            if (!state) return;
+            const visible = state.checked || state.recommended;
+            state.polyline.setMap(visible ? map : null);
+            state.badgeOverlay.setMap(visible ? map : null);
+        }
+
+        function toggleRoute(routeId, visible) {
+            const state = routeState[routeId];
+            if (!state) return;
+            state.checked = visible;
+            updateRouteVisibility(routeId);
+            updateSelectedRouteCount();
+
+            if (visible) {
+                const bounds = new kakao.maps.LatLngBounds();
+                state.polyline.getPath().forEach(point => bounds.extend(point));
+                map.setBounds(bounds, 60, 60, 60, 60);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // 6-5-1. 핀 팝업의 "추천 버스경로" 토글: 반경 1km 이내(없으면 최근접 1개) 노선을 하이라이트
+        // ------------------------------------------------------------------
+        let activeRecommendation = null; // { poiId, routeIds: string[] }
+
+        function setRecommendButtonState(buttonEl, isOn, isLoading = false) {
+            if (!buttonEl) return;
+            buttonEl.disabled = isLoading;
+            buttonEl.classList.toggle('opacity-50', isLoading);
+            const active = isOn && !isLoading;
+            buttonEl.classList.toggle('bg-blue-500', active);
+            buttonEl.classList.toggle('text-white', active);
+            buttonEl.classList.toggle('border-blue-500', active);
+            buttonEl.classList.toggle('bg-white', !active);
+            buttonEl.classList.toggle('text-gray-500', !active);
+            buttonEl.classList.toggle('border-gray-300', !active);
+            buttonEl.textContent = isLoading ? '🚌 불러오는 중...' : (isOn ? '🚌 추천 버스경로 ON' : '🚌 추천 버스경로');
+        }
+
+        function clearActiveRecommendation() {
+            if (!activeRecommendation) return;
+            activeRecommendation.routeIds.forEach(routeId => {
+                const state = routeState[routeId];
+                if (!state) return;
+                state.recommended = false;
+                updateRouteVisibility(routeId);
+            });
+            activeRecommendation = null;
+        }
+
+        async function toggleRecommendedRoutes(poiId, latStr, lngStr, buttonEl) {
+            if (activeRecommendation && activeRecommendation.poiId === poiId) {
+                clearActiveRecommendation();
+                setRecommendButtonState(buttonEl, false);
+                return;
+            }
+
+            clearActiveRecommendation();
+
+            const lat = parseFloat(latStr);
+            const lng = parseFloat(lngStr);
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            setRecommendButtonState(buttonEl, false, true);
+            try {
+                const res = await fetch(`${window.__API_BASE_URL__}/api/routes/near?mapx=${lng}&mapy=${lat}&radius_km=1`);
+                if (!res.ok) throw new Error(`API 응답 오류: ${res.status}`);
+                const nearbyRoutes = await res.json();
+
+                const routeIds = [];
+                nearbyRoutes.forEach(route => {
+                    const state = routeState[route.route_id];
+                    if (!state) return;
+                    state.recommended = true;
+                    updateRouteVisibility(route.route_id);
+                    routeIds.push(route.route_id);
+                });
+
+                activeRecommendation = { poiId, routeIds };
+                setRecommendButtonState(buttonEl, true, false);
+
+                if (routeIds.length > 0) {
+                    // 노선 전체(기점~종점)를 다 담으려고 지도가 과하게 축소되지 않도록,
+                    // bounds 맞춤 대신 현재 확대 단계에서 살짝(1단계)만 축소하며, animate 옵션으로
+                    // 갑자기 튀지 않고 부드럽게 축소되도록 한다.
+                    map.setLevel(map.getLevel() + 1, { animate: true });
+                }
+            } catch (err) {
+                console.error('추천 버스경로를 불러오지 못했습니다:', err);
+                clearActiveRecommendation(); // 일부 노선이 이미 recommended=true로 표시된 상태일 수 있으므로 되돌린다.
+                setRecommendButtonState(buttonEl, false, false);
+            }
+        }
+
+        document.getElementById('route-check-all-btn').addEventListener('click', () => {
+            document.querySelectorAll('#route-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+                toggleRoute(cb.dataset.routeId, true);
+            });
+        });
+        document.getElementById('route-uncheck-all-btn').addEventListener('click', () => {
+            document.querySelectorAll('#route-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+                toggleRoute(cb.dataset.routeId, false);
+            });
+        });
+        document.getElementById('route-search-input').addEventListener('input', (e) => {
+            renderRoutePanel(e.target.value);
+        });
+
+        // ------------------------------------------------------------------
+        // 6-5-2. 길찾기(출발지→도착지) 버스 경로 표시
+        //   부모 페이지(index_db2.html)의 길찾기 결과 카드를 클릭하면
+        //   'localhub:show-bus-plan' 메시지로 경로 정보가 넘어온다.
+        //   승차 구간은 노선 색의 굵은 실선, 도보 구간은 회색 점선으로 그린다.
+        // ------------------------------------------------------------------
+        let busPlanOverlays = [];
+
+        function buildPlanPointLabel(text, color) {
+            return `
+                <div style="display:flex;flex-direction:column;align-items:center;">
+                    <div style="background:${color};color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:9999px;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);white-space:nowrap;">${text}</div>
+                    <div style="width:2px;height:8px;background:${color};"></div>
+                    <div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                </div>
+            `;
+        }
+
+        function buildPlanStopDot(color) {
+            return `<div style="width:13px;height:13px;border-radius:50%;background:#fff;border:3.5px solid ${color};box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div>`;
+        }
+
+        function clearBusPlan() {
+            busPlanOverlays.forEach(overlay => overlay.setMap(null));
+            busPlanOverlays = [];
+        }
+
+        function showBusPlan(data) {
+            clearBusPlan();
+            hideActivePoiOverlay();
+            document.querySelectorAll('#category-list input[type="checkbox"]').forEach(cb => {
+
+
+
+                cb.checked = false;
+
+
+
+                toggleCategory(cb.dataset.type, false);
+
+
+
+            });
+            const { plan, origin, destination } = data;
+            if (!plan || !plan.legs || !plan.legs.length) return;
+
+            const bounds = new kakao.maps.LatLngBounds();
+            const originPos = new kakao.maps.LatLng(origin.lat, origin.lng);
+            const destPos = new kakao.maps.LatLng(destination.lat, destination.lng);
+            bounds.extend(originPos);
+            bounds.extend(destPos);
+
+            const walkSegments = [];
+            let prevPos = originPos;
+
+            plan.legs.forEach(leg => {
+                const state = routeState[leg.route_id];
+                const color = state ? state.color : '#2563EB';
+                const boardPos = new kakao.maps.LatLng(leg.board.lat, leg.board.lng);
+                const alightPos = new kakao.maps.LatLng(leg.alight.lat, leg.alight.lng);
+
+                // 도보 구간: 직전 지점 -> 승차 정류장
+                walkSegments.push([prevPos, boardPos]);
+                prevPos = alightPos;
+
+                // 승차 구간: 전체 노선(polyline)에서 승차~하차 인덱스 구간만 잘라서 표시
+                let segmentPath = [boardPos, alightPos];
+                if (state) {
+                    const fullPath = state.polyline.getPath();
+                    const from = Math.min(leg.board.idx, leg.alight.idx);
+                    const to = Math.max(leg.board.idx, leg.alight.idx);
+                    if (fullPath.length > to) segmentPath = fullPath.slice(from, to + 1);
+                }
+                const segmentLine = new kakao.maps.Polyline({
+                    path: segmentPath,
+                    strokeWeight: 7,
+                    strokeColor: color,
+                    strokeOpacity: 0.95,
+                    strokeStyle: 'solid',
+                    zIndex: 5,
+                    map: map
+                });
+                busPlanOverlays.push(segmentLine);
+                segmentPath.forEach(point => bounds.extend(point));
+
+                // 승/하차 정류장 점 + 구간 중앙의 버스번호 뱃지
+                busPlanOverlays.push(new kakao.maps.CustomOverlay({
+                    content: buildPlanStopDot(color), position: boardPos, zIndex: 25, map: map
+                }));
+                busPlanOverlays.push(new kakao.maps.CustomOverlay({
+                    content: buildPlanStopDot(color), position: alightPos, zIndex: 25, map: map
+                }));
+                const midPos = segmentPath[Math.floor(segmentPath.length / 2)];
+                busPlanOverlays.push(new kakao.maps.CustomOverlay({
+                    content: buildRouteBadgeContent(leg.route_no, color), position: midPos, yAnchor: 0.5, zIndex: 30, map: map
+                }));
+            });
+
+            // 마지막 도보 구간: 하차 정류장 -> 도착지
+            walkSegments.push([prevPos, destPos]);
+            walkSegments.forEach(([fromPos, toPos]) => {
+                busPlanOverlays.push(new kakao.maps.Polyline({
+                    path: [fromPos, toPos],
+                    strokeWeight: 3,
+                    strokeColor: '#6B7280',
+                    strokeOpacity: 0.9,
+                    strokeStyle: 'shortdash',
+                    map: map
+                }));
+            });
+
+            busPlanOverlays.push(new kakao.maps.CustomOverlay({
+                content: buildPlanPointLabel('출발', '#10B981'), position: originPos, yAnchor: 1, zIndex: 35, map: map
+            }));
+            busPlanOverlays.push(new kakao.maps.CustomOverlay({
+                content: buildPlanPointLabel('도착', '#EF4444'), position: destPos, yAnchor: 1, zIndex: 35, map: map
+            }));
+
+            map.setBounds(bounds, 80, 80, 80, 80);
+        }
+
+        window.addEventListener('message', (event) => {
+            if (event.origin !== window.location.origin || !map) return;
+            if (event.data?.type === 'localhub:show-bus-plan') {
+                showBusPlan(event.data);
+            } else if (event.data?.type === 'localhub:clear-bus-plan') {
+                clearBusPlan();
+            }
+        });
+
+        // ------------------------------------------------------------------
+        // 6-6. 패널 접기/펼치기 (지도를 더 크게 보고 싶을 때 사용)
+        // ------------------------------------------------------------------
+        function setupCollapsiblePanel({ toggleBtnId, iconId, contentId, panelId, expandedWidthClass }) {
+            const toggleBtn = document.getElementById(toggleBtnId);
+            const icon = document.getElementById(iconId);
+            const content = document.getElementById(contentId);
+            const panel = document.getElementById(panelId);
+
+            toggleBtn.addEventListener('click', () => {
+                const isCollapsed = content.classList.toggle('hidden');
+                // 접혔을 땐 화살표가 위(▲)를 향하게, 펼쳤을 땐 아래(▼)를 향하게
+                icon.style.transform = isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+                toggleBtn.title = isCollapsed ? '패널 펼치기' : '패널 접기';
+
+                // 고정 너비 패널(버스노선)은 접혔을 때 헤더 크기만큼만 차지하도록 너비 클래스를 뺀다.
+                if (expandedWidthClass) {
+                    panel.classList.toggle(expandedWidthClass, !isCollapsed);
+                }
+            });
+        }
+
+        setupCollapsiblePanel({
+            toggleBtnId: 'filter-toggle-btn',
+            iconId: 'filter-toggle-icon',
+            contentId: 'filter-content',
+            panelId: 'filter-panel'
+        });
+
+        setupCollapsiblePanel({
+            toggleBtnId: 'route-toggle-btn',
+            iconId: 'route-toggle-icon',
+            contentId: 'route-content',
+            panelId: 'route-panel',
+            expandedWidthClass: 'w-64'
+        });
+
+        // ------------------------------------------------------------------
+        // 7. 데이터 fetch 후 렌더링
+        // ------------------------------------------------------------------
+        async function loadPois() {
+            try {
+                const res = await fetch(`${window.__API_BASE_URL__}/api/pois`);
+                if (!res.ok) throw new Error(`API 응답 오류: ${res.status}`);
+                const pois = await res.json();
+                renderPois(pois);
+                if (hasRequestedCenter && map) {
+                    const center = new kakao.maps.LatLng(requestedLat, requestedLng);
+                    map.setCenter(center);
+                    map.setLevel(4);
+                }
+            } catch (err) {
+                console.error('POI 데이터를 불러오지 못했습니다:', err);
+                const panel = document.getElementById('filter-panel');
+                panel.innerHTML = `<div class="text-red-500 text-xs">데이터 로드 실패: ${err.message}</div>`;
+            }
+        }
+
+        async function loadRoutes() {
+            try {
+                const res = await fetch(`${window.__API_BASE_URL__}/api/routes`);
+                if (!res.ok) throw new Error(`API 응답 오류: ${res.status}`);
+                const routes = await res.json();
+                renderRoutes(routes);
+            } catch (err) {
+                console.error('버스 노선 데이터를 불러오지 못했습니다:', err);
+                const panel = document.getElementById('route-panel');
+                panel.innerHTML = `<div class="text-red-500 text-xs">노선 데이터 로드 실패: ${err.message}</div>`;
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // 7-1. 부모 페이지에서 "이 장소로 이동해줘" 요청을 받았을 때
+        //      (지도가 이미 떠 있는 상태에서 검색결과 등을 클릭한 경우, iframe을
+        //       통째로 새로고침하지 않고 지도만 이동시켜서 재생성 비용을 아낀다.)
+        // ------------------------------------------------------------------
+        window.addEventListener('message', (event) => {
+            if (event.origin !== window.location.origin || event.data?.type !== 'localhub:focus-place') return;
+            if (!map) return;
+
+            const { lat, lng, focusId, category } = event.data;
+
+            if (category && categoryState[category] && !categoryState[category].checked) {
+                toggleCategory(category, true);
+                const checkbox = document.querySelector(`#category-list input[data-type="${category}"]`);
+                if (checkbox) checkbox.checked = true;
+            }
+
+            const focused = focusId ? poiMarkerIndex.get(String(focusId)) : null;
+            if (focused) {
+                showPoiOverlay(focused.poi, focused.overlay, focused.position, false, focused.marker, focused.markerImage);
+            } else if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                focusMapOn(new kakao.maps.LatLng(lat, lng));
+            }
+        });
+
+        // ------------------------------------------------------------------
+        // 8. 메인 실행부
+        // ------------------------------------------------------------------
+        kakao.maps.load(function () {
+            map = initMap();
+            loadPois();
+            loadRoutes();
+        });
+    </script>
+</body>
+</html>
