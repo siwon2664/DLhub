@@ -727,7 +727,7 @@
 
         <!-- [4. 우측 하단 플로팅 챗봇 (FAB)] -->
         <!-- 모바일에서는 하단 탭 영역 위에 배치되도록 바텀 오프셋 조정 (bottom-20) -->
-        <div class="fixed bottom-20 right-4 md:bottom-10 md:right-[calc(50%-550px)] z-50 flex flex-col items-end">
+        <div class="fixed bottom-20 right-4 md:bottom-10 md:right-10 z-50 flex flex-col items-end">
             
             <!-- 챗봇 창 (열렸을 때) -->
             <transition name="chat">
@@ -2054,7 +2054,7 @@ import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
                         console.error('Chat API Error:', error);
                         chatMessages.value.push({ 
                             role: 'assistant', 
-                            content: '백엔드 서버 또는 OpenAI 연동에 에러가 발생했슈... API 키 설정을 확인하거나 서버(http://localhost:8000) 상태를 점검해봐 주셔유!' 
+                            content: '백엔드 서버 또는 OpenAI 연동에 에러가 발생했슈... API 키 설정을 확인하거나 서버 상태를 점검해봐 주셔유!' 
                         });
                     } finally {
                         chatLoading.value = false;
