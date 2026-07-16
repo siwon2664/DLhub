@@ -1,5 +1,5 @@
 <template>
-    <div id="localhub-app" class="flex flex-col h-full w-full max-w-[1200px] mx-auto bg-white shadow-xl relative">
+    <div id="localhub-app" class="flex flex-col h-full w-full bg-white relative">
         
         <!-- [1. 상단 헤더 영역] -->
         <header class="flex justify-between items-center p-4 border-b border-gray-200 shrink-0 bg-white z-10">
