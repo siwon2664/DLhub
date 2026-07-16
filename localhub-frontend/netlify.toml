@@ -1,6 +1,9 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  
+  [build.environment]
+  NODE_VERSION = "22"
 
 # kakaomap.html은 SPA 라우팅 대상이 아닌 실제 정적 파일이므로 리다이렉트보다 먼저 매칭되어야 한다.
 [[redirects]]
